@@ -135,20 +135,47 @@ char *addBinary(const char *a, const char *b)
     return result;
 }
 
+// Cleanup functions
+void cleanup_numbers(char **numbers, int count)
+{
+    if (numbers)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            if (numbers[i])
+            {
+                free(numbers[i]);
+            }
+        }
+        free(numbers);
+    }
+}
+
+void cleanup_and_exit(char *line, char *sum, char **numbers, int count)
+{
+    if (line)
+        free(line);
+    if (sum)
+        free(sum);
+    cleanup_numbers(numbers, count);
+    exit(1);
+}
+
 int main()
 {
-    char *line;
-    char *sum = strdup("0"); // Initialize sum to "0"
+    char *line = NULL;
+    char *sum = strdup("0");
     char **numbers = NULL;
     int numCount = 0;
+    int success = 1; // Track if all operations succeeded
 
     if (!sum)
     {
         fprintf(stderr, "Unable to allocate memory for sum\n");
-        return 1;
+        cleanup_and_exit(NULL, sum, numbers, numCount);
     }
 
-    while ((line = getLine()) != NULL)
+    while ((line = getLine()) != NULL && success)
     {
         if (strlen(line) == 0)
         {
@@ -159,17 +186,8 @@ int main()
         if (!isValidBinary(line))
         {
             fprintf(stderr, "Error: Invalid binary number format\n");
-            free(line);
-            free(sum);
-            for (int i = 0; i < numCount; i++)
-            {
-                if (numbers[i])
-                {
-                    free(numbers[i]);
-                }
-            }
-            free(numbers);
-            return 1;
+            success = 0;
+            cleanup_and_exit(line, sum, numbers, numCount);
         }
 
         removeWhitespace(line);
@@ -177,68 +195,45 @@ int main()
         if (!temp)
         {
             fprintf(stderr, "Unable to reallocate memory for numbers\n");
-            free(line);
-            free(sum);
-            for (int i = 0; i < numCount; i++)
-            {
-                if (numbers[i])
-                {
-                    free(numbers[i]);
-                }
-            }
-            free(numbers);
-            return 1;
+            success = 0;
+            cleanup_and_exit(line, sum, numbers, numCount);
         }
         numbers = temp;
-        numbers[numCount] = strdup(line); // Duplicate the line to store it in `numbers`
+
+        numbers[numCount] = strdup(line);
         if (!numbers[numCount])
         {
             fprintf(stderr, "Unable to allocate memory for input number\n");
-            free(line);
-            free(sum);
-            for (int i = 0; i < numCount; i++)
-            {
-                if (numbers[i])
-                {
-                    free(numbers[i]);
-                }
-            }
-            free(numbers);
-            return 1;
+            success = 0;
+            cleanup_and_exit(line, sum, numbers, numCount);
         }
-        numCount++;
 
         char *newSum = addBinary(sum, line);
         if (!newSum)
         {
-            free(line);
-            free(sum);
-            for (int i = 0; i < numCount; i++)
-            {
-                if (numbers[i])
-                {
-                    free(numbers[i]);
-                }
-            }
-            free(numbers);
-            return 1;
+            fprintf(stderr, "Unable to calculate sum\n");
+            success = 0;
+            cleanup_and_exit(line, sum, numbers, numCount);
         }
+
         free(sum);
         sum = newSum;
-        free(line); // Free the original line after processing
+        free(line);
+        numCount++;
     }
 
-    printf("Sum:\n%s\n", sum);
-    printf("Input numbers:\n");
-    for (int i = 0; i < numCount; i++)
+    // Only print results if all operations succeeded
+    if (success && numbers && numCount > 0)
     {
-        if (numbers[i])
+        printf("Sum:\n%s\n", sum);
+        printf("Input numbers:\n");
+        for (int i = 0; i < numCount; i++)
         {
-            printf("%s\n", numbers[i]); // Print each input number
-            free(numbers[i]);
+            printf("%s\n", numbers[i]);
         }
     }
+
+    cleanup_numbers(numbers, numCount);
     free(sum);
-    free(numbers);
-    return 0;
+    return !success;
 }
