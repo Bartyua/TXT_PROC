@@ -5,7 +5,7 @@
 #include "rand_malloc.h"
 
 // Function to read a line from standard input
-char *getLine()
+char *getLine(int *success)
 {
     int bufferSize = 10; // Initial buffer size
     int position = 0;
@@ -14,6 +14,7 @@ char *getLine()
 
     if (!buffer)
     {
+        *success = 0;
         fprintf(stderr, "Unable to allocate buffer\n");
         return NULL;
     }
@@ -64,11 +65,22 @@ char *getLine()
 // Function to check if a string is a valid binary number
 int isValidBinary(const char *str)
 {
+    int flag = 0;
     while (*str)
-    {
+    {   
         if (*str != '0' && *str != '1' && !isspace(*str))
         {
             return 0;
+        }
+        if (isspace(*str)) {
+            if (flag) { // If we've seen a digit before
+            flag = 2; // Mark that we've seen whitespace after digits
+            }
+        } else {
+            if (flag == 2) { // If we see a digit after whitespace
+            return 0;    // Invalid format
+            }
+            flag = 1; // Mark that we've seen a digit
         }
         str++;
     }
@@ -101,38 +113,56 @@ char *addBinary(const char *a, const char *b)
     int lenA = strlen(a);
     int lenB = strlen(b);
     int maxLen = (lenA > lenB) ? lenA : lenB;
-    char *result = malloc(maxLen + 2); // +1 for possible carry, +1 for null terminator
+    char *result = malloc(maxLen + 2); // +1 for carry, +1 for null terminator
+
     if (!result)
     {
         fprintf(stderr, "Unable to allocate memory for addition result\n");
         return NULL;
     }
 
-    int carry = 0;
-    int i = lenA - 1, j = lenB - 1;
-    int resIndex = maxLen; // Start from the end of the result string
+    char carry = '0';
     result[maxLen + 1] = '\0';
+    int k = maxLen;
 
-    while (i >= 0 || j >= 0 || carry)
+    // Process digits from right to left
+    int i = lenA - 1;
+    int j = lenB - 1;
+
+    while (i >= 0 || j >= 0 || carry == '1')
     {
-        int sum = carry;
-        if (i >= 0)
-            sum += a[i--] - '0';
-        if (j >= 0)
-            sum += b[j--] - '0';
-        result[resIndex--] = (sum % 2) + '0';
-        carry = sum / 2;
+        char bitA = (i >= 0) ? a[i] : '0';
+        char bitB = (j >= 0) ? b[j] : '0';
+
+        if (bitA == '1' && bitB == '1')
+        {
+            result[k] = (carry == '1') ? '1' : '0';
+            carry = '1';
+        }
+        else if (bitA == '0' && bitB == '0')
+        {
+            result[k] = carry;
+            carry = '0';
+        }
+        else
+        {
+            result[k] = (carry == '1') ? '0' : '1';
+        }
+
+        k--;
+        i--;
+        j--;
     }
 
-    // If we have unused space at the start, shift everything left
-    if (resIndex >= 0)
+    // Shift result if there's no carry
+    if (k >= 0)
     {
-        int shift = resIndex + 1;
-        memmove(result, result + shift, maxLen - resIndex);
-        result[maxLen - resIndex] = '\0';
+        memmove(result, result + k + 1, maxLen - k);
+        result[maxLen - k] = '\0';
+        return result;
     }
 
-    return result;
+    return result + k + 1;
 }
 
 // Cleanup functions
@@ -142,10 +172,7 @@ void cleanup_numbers(char **numbers, int count)
     {
         for (int i = 0; i < count; i++)
         {
-            if (numbers[i])
-            {
-                free(numbers[i]);
-            }
+            free(numbers[i]);
         }
         free(numbers);
     }
@@ -172,10 +199,10 @@ int main()
     if (!sum)
     {
         fprintf(stderr, "Unable to allocate memory for sum\n");
-        cleanup_and_exit(NULL, sum, numbers, numCount);
+        return 1;
     }
 
-    while ((line = getLine()) != NULL && success)
+    while ((line = getLine(&success)) != NULL)
     {
         if (strlen(line) == 0)
         {
@@ -186,7 +213,6 @@ int main()
         if (!isValidBinary(line))
         {
             fprintf(stderr, "Error: Invalid binary number format\n");
-            success = 0;
             cleanup_and_exit(line, sum, numbers, numCount);
         }
 
@@ -195,31 +221,25 @@ int main()
         if (!temp)
         {
             fprintf(stderr, "Unable to reallocate memory for numbers\n");
-            success = 0;
             cleanup_and_exit(line, sum, numbers, numCount);
         }
         numbers = temp;
-
-        numbers[numCount] = strdup(line);
-        if (!numbers[numCount])
-        {
-            fprintf(stderr, "Unable to allocate memory for input number\n");
-            success = 0;
-            cleanup_and_exit(line, sum, numbers, numCount);
-        }
+        numbers[numCount] = line; // Store the original line pointer
 
         char *newSum = addBinary(sum, line);
         if (!newSum)
         {
             fprintf(stderr, "Unable to calculate sum\n");
-            success = 0;
             cleanup_and_exit(line, sum, numbers, numCount);
         }
 
         free(sum);
         sum = newSum;
-        free(line);
         numCount++;
+    }
+    if (success && numCount == 0)
+    {
+        printf("Empty Input\n");
     }
 
     // Only print results if all operations succeeded
@@ -235,5 +255,4 @@ int main()
 
     cleanup_numbers(numbers, numCount);
     free(sum);
-    return !success;
 }
